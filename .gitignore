@@ -1,0 +1,80 @@
+# Python cache
+
+**pycache**/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+
+.venv/
+venv/
+env/
+
+# Python package/build files
+
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Nuitka build output
+
+*.build/
+*.dist/
+*.onefile-build/
+*.cmd
+
+# PyInstaller output
+
+*.spec
+
+# Logs / temporary files
+
+*.log
+*.tmp
+*.temp
+*.bak
+
+# Test / coverage cache
+
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE / Editor
+
+.vscode/
+.idea/
+
+# OS files
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local configuration / secrets
+
+.env
+.env.*
+*.local
+
+# Save files / runtime data
+
+saves/
+save/
+logs/
+cache/
+
+# Generated executable files
+
+*.exe
+
+# Generated archives
+
+*.zip
+*.7z
+*.rar
+
+
+# Large original map asset
+game/assets/maps/drive_city_original.glb
