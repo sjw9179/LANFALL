@@ -24,7 +24,9 @@ def main():
         for i in range(49): clients.append(Connection('127.0.0.1',host.port,f'TEST {i+1:02}'))
         for c in clients[1:]: wait(c,'welcome'); c.send('ready',ready=True)
         time.sleep(.5); first.send('start')
-        for c in clients: wait(c,'started')
+        for c in clients:
+            started=wait(c,'started');c.send('loaded',round=started['round'])
+        for c in clients:wait(c,'deployed')
         deadline=time.monotonic()+8; timings=[]; snapshots=[0]*50; max_players=0
         while time.monotonic()<deadline:
             for i,c in enumerate(clients):

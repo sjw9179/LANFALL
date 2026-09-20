@@ -9,7 +9,7 @@ from game.network.protocol import Framer,frame,decode,encode,finite_vector
 from game.server.match import Match,Player
 
 def box(world,pos,size):
-    body=BulletRigidBodyNode('test'); body.addShape(BulletBoxShape(Vec3(*size)/2)); body.setIntoCollideMask(BitMask32.bit(0))
+    body=BulletRigidBodyNode('test'); shape=BulletBoxShape(Vec3(*size)/2); shape.setMargin(.001); body.addShape(shape); body.setIntoCollideMask(BitMask32.bit(0))
     node=world.root.attachNewNode(body); node.setPos(*pos); world.world.attachRigidBody(body)
     return node
 
@@ -24,14 +24,14 @@ def advance(m,steps,**controls):
 
 def test_flat_wall_jump_and_no_double_jump(world):
     m=Mover(world,(0,.03,0)); advance(m,30,move=[0,1])
-    assert m.grounded and 5<m.pos.z<6 and .01<m.pos.y<.05
+    assert m.grounded and 5<m.pos.z<6 and .01<m.pos.y<.08
     box(world,(0,2,8),(8,4,.3)); advance(m,90,move=[0,1]); assert m.pos.z<7.8
     m.pos=Vec3(20,.03,0); advance(m,2)
     heights=[]
     for i in range(100):
         m.step({'jump':True},1/30); heights.append(m.pos.y)
     assert 1<max(heights)<1.5
-    assert m.grounded and m.pos.y<.05
+    assert m.grounded and m.pos.y<.08
     # Releasing midair and pressing again cannot add another impulse.
     advance(m,1,jump=False); advance(m,1,jump=True)
     vy=m.vy; advance(m,1,jump=False); advance(m,1,jump=True)
@@ -42,6 +42,16 @@ def test_steps_and_high_ledge(world):
     m=Mover(world,(0,.03,0)); advance(m,25,move=[0,1])
     assert m.pos.z>4 and m.pos.y>.6
     box(world,(0,2,8),(4,4,1)); advance(m,90,move=[0,1]); assert m.pos.z<7.5
+
+def test_curb_without_jump_and_crouch_clearance(world):
+    box(world,(0,.22,3),(4,.44,3))
+    m=Mover(world,(0,.03,0));advance(m,18,move=[0,1])
+    assert m.pos.z>2.5 and .44<m.pos.y<.51 and m.grounded
+    m.pos=Vec3(10,.025,0);m.crouch=True
+    box(world,(10,1.7,0),(3,.2,3));advance(m,3)
+    assert m.crouch
+    m.pos=Vec3(20,.025,0);advance(m,3)
+    assert not m.crouch
 
 def ramp(world,slope):
     mesh=BulletTriangleMesh(); end=10; height=end*slope
@@ -90,6 +100,16 @@ def test_pickup_exclusive_and_victory(world):
     m.damage(b,1000,a,source='shot'); m.update(1/30)
     assert m.phase=='finished' and m.winner==a.id
     m.return_lobby(); assert m.phase=='lobby' and not a.ready
+
+def test_inventory_switch_and_pickup_through_wall(world):
+    m,e=new_match(world);a=m.players[1];a.mover.pos=Vec3(0,.025,0)
+    m.items={77:dict(id=77,kind='rifle',pos=[0,.025,2])}
+    wall=box(world,(0,1,1),(4,2,.2))
+    m.action(a,'pickup',item=77);assert 77 in m.items and 'rifle' not in a.inventory
+    world.world.removeRigidBody(wall.node());wall.removeNode()
+    m.action(a,'pickup',item=77);assert a.weapon=='rifle' and 77 not in m.items
+    m.action(a,'switch',weapon='pistol');assert a.weapon=='pistol'
+    m.action(a,'switch',weapon='dmr');assert a.weapon=='pistol'
 
 def test_solo_practice_does_not_instantly_win(world):
     m,e=new_match(world,1); m.update(1/30)

@@ -1,206 +1,146 @@
-# 🎯 PACKET DROP
+# LANFALL
 
-> **Python-based LAN Multiplayer 3D Battle Royale FPS**
+영주고등학교 게임 프로그래밍 과목 수행평가를 위해 제작한 학습용 프로젝트입니다. Python / Ursina / Panda3D로 만든 Windows LAN 배틀로얄 FPS입니다. 방장 PC가 게임과 서버를 같이 실행하며, 설치 뒤에는 인터넷 서버가 필요하지 않습니다.
 
-**PACKET DROP**은 같은 로컬 네트워크에 연결된 플레이어들이 별도의 인터넷 서버 없이 함께 플레이할 수 있도록 제작하는 소규모 3D 배틀로얄 FPS 프로젝트입니다.
+## 지금 실행하기
 
-Python과 Ursina Engine을 기반으로 제작하며, LAN 환경에서 **UDP Broadcast를 이용해 게임방을 자동 탐색**하고 실제 게임 데이터는 Host와 Client 간의 통신으로 동기화하는 것을 목표로 합니다.
+[최신 Windows 릴리즈](https://github.com/sjw9179/LANFALL/releases/latest)에서 **`LANFALL.exe` 하나만** 내려받아 더블클릭하면 됩니다. Python을 설치할 필요가 없습니다. 개발 폴더에서는 `Play-LANFALL.cmd`로도 실행할 수 있습니다. 실행파일이 없으면 준비된 `.venv`와 에셋으로 소스를 실행합니다. 소스 실행은 Python 3.12 이상이 필요합니다.
 
-본 프로젝트는 **영주고등학교 게임 프로그래밍 과목 수행평가**를 위해 제작한 학습용 프로젝트입니다. 제한된 개발 기간 안에서 3D 게임 제작과 Python 프로그래밍, LAN 기반 네트워크 통신을 직접 적용해 보는 것을 목적으로 하며, 상용 게임 수준보다는 핵심 기능 구현과 기술 학습에 중점을 두어 가볍게 제작하였습니다.
+플레이용 EXE에는 모든 리소스와 런타임이 포함되어 있으며 별도 다운로드가 없습니다. 소스 개발자는 같은 버전의 EXE를 한 번 실행한 뒤 아래 명령으로 로컬 실행 캐시에서 리소스를 가져올 수 있습니다. `Play-LANFALL.cmd`도 같은 방식으로 준비합니다. 소스용 Python 의존성 설치에는 인터넷이 필요합니다.
 
----
-
-## 🎮 Game Rule
-
-플레이어들은 맵의 서로 다른 위치에서 시작합니다.
-
-맵 곳곳에서 총기, 탄약, 방어구와 회복 아이템을 획득하고 다른 플레이어와 전투하게 됩니다. 시간이 지나면서 안전구역이 점점 좁아지며, 안전구역 밖에서는 지속적으로 피해를 받습니다.
-
-**마지막까지 살아남은 플레이어가 승리합니다.**
-
-* Players: `2 ~ 10`
-* Mode: `Solo Battle Royale`
-* Match Time: `5 ~ 10 min`
-* Respawn: `Disabled`
-* Winner: `Last Survivor`
-
----
-
-## 🌐 LAN Multiplayer
-
-PACKET DROP은 별도의 온라인 서버를 사용하지 않습니다.
-
-한 플레이어의 PC가 **Host** 역할을 하며 같은 네트워크의 다른 플레이어들이 해당 게임에 접속합니다.
-
-```text
-                UDP Broadcast
-                     │
-                     ▼
-              ┌─────────────┐
-              │    HOST     │
-              │  + Player   │
-              └──────┬──────┘
-                     │
-             ┌───────┼───────┐
-             │       │       │
-          Client   Client   Client
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe tools/fetch_runtime.py
+.\.venv\Scripts\python.exe main.py
 ```
 
-UDP Broadcast는 같은 서브넷 안에서 실행 중인 게임방을 찾는 **LAN Discovery** 용도로 사용합니다.
+1. **방 만들기**에서 닉네임·방 이름·정원·봇 수를 정합니다.
+2. 혼자 연습하려면 **정원 1 / 봇 0**, 혼자 봇과 싸우려면 정원 안에서 봇을 추가합니다.
+3. 친구와 1대1은 **정원 2 / 봇 0**입니다. 정원은 최대 50명이며 봇도 자리를 차지합니다.
+4. 공개방은 초대 코드를 비우고, 친구끼리만 입장하려면 코드를 설정합니다.
+5. 다른 PC는 **LAN 방 찾기**에서 참가합니다. 코드가 있는 방은 `IP:29741#코드` 형태의 초대 주소를 직접 참가 칸에 입력합니다.
+6. 참가자가 모두 준비하면 방장이 **대기실에서 게임 시작**을 누릅니다. 진행 중인 판에는 새로 참가할 수 없습니다.
+   대기실에서 방장의 **+ 봇 투입 / - 봇 제외**로 AI 인원을 1명씩 바꿀 수 있습니다. 사람과 봇을 합쳐 정원 이내로 제한됩니다.
+7. 개인전은 마지막 생존자, **4인 스쿼드**는 마지막 생존 팀이 승리합니다. 스쿼드 방에서는 팀 카드의 이전/다음 버튼과 **이 팀에 참가**로 팀을 선택합니다(팀당 최대 4명, 팀원 오사 없음). 봇은 상대 팀으로 배치됩니다.
+8. 시작 시 전원의 맵 준비 완료를 확인한 뒤 동시에 전투를 시작합니다. 준비 중에는 이동·사격·자기장이 진행되지 않습니다. 로딩이 90초 넘게 걸린 참가자는 제외됩니다.
+9. 사망 후 자동으로 방을 나가지 않습니다. 순위·처치·가한 피해·헤드 명중·생존 시간을 확인하고 관전 또는 나가기를 선택합니다. 결과에서 방장이 대기실로 돌아가 재경기를 시작할 수 있습니다.
 
-게임방을 찾은 이후에는 Host와 각 Client가 직접 통신하여 플레이어 위치, 사격, HP, 아이템, 자기장 등의 상태를 동기화합니다.
+맵 선택 화면은 확장 가능한 화면으로 구성했으며 현재 선택 가능한 맵은 **DRIVE CITY** 하나입니다. 공급받은 대형 도시에서 반경 약 185m의 구역을 전장으로 사용합니다.
 
----
+## 자기장
 
-## 🛠 Tech Stack
+처음에는 90초의 준비 시간이 있고 45초 동안 첫 원이 줄어듭니다. 이후 단계는 25초 대기 + 45초 축소입니다. 다음 원은 현재 원 안에 완전히 포함되는 임의의 위치로 정해집니다. 약 8분에 최종 구역이 닫히며, 바깥 피해는 단계가 올라갈수록 커집니다. 미니맵과 M 지도에서 **안전구역 바깥이 파란색**으로 표시되고, 흰 원은 다음 안전구역입니다. 판정은 방장이 담당합니다.
 
-| Category      | Technology    |
-| ------------- | ------------- |
-| Language      | Python        |
-| Game Engine   | Ursina Engine |
-| 3D Engine     | Panda3D       |
-| Networking    | Python Socket |
-| LAN Discovery | UDP Broadcast |
-| Multiplayer   | UDP / TCP     |
-| Build         | Nuitka        |
-| Platform      | Windows       |
+혼자 봇 없이 들어간 판은 즉시 승리하지 않는 연습 모드입니다. 연습 중에도 자기장은 동작하며, 나가려면 Esc → 방 나가기를 사용합니다.
 
----
+## 조작
 
-## ✨ Planned Features
+| 키 | 동작 |
+|---|---|
+| WASD / 마우스 | 이동 / 시점 |
+| Shift / Space / C 또는 Ctrl | 달리기 / 점프 / 앉기 |
+| 마우스 왼쪽 / 오른쪽 클릭 | 사격 / 조준 켜기·끄기 (누르고 있을 필요 없음) |
+| 조준 중 마우스 휠 | 1x / 2x / 4x 고정 배율 전환 |
+| R / F / H | 재장전 / 근처 아이템 획득 / 회복 사용 |
+| 1 / 2 / 3 / 4 / 5 | 권총 / M4A1 / MP7 / 870 / AKM-S DMR (보유 무기만) |
+| Tab | 인벤토리: 보유 무기 장착, 주변 아이템 줍기, 장비·회복·배율 선택 |
+| F4 (누르기) | 최대 50명 생존·킬 목록 |
+| M | 전체 지도 열기/닫기. 휠 확대·축소, 좌클릭 목적지 지정, 우클릭 표식 삭제, 휠 누르고 드래그 이동 |
+| Esc | 메뉴. 멀티플레이 시간은 계속 흐릅니다. |
+| 관전 중 Q / E 또는 왼쪽 클릭 | 이전 / 다음 생존자 (살아 있는 팀원 우선) |
+| 관전 중 V / J | 1인칭·3인칭 전환 / 내 전적 다시 보기 |
+| X | 사용 중인 회복템 취소 |
+| F1 / F2 / F3 | 디버그 정보 / 충돌 메시 / 사격 궤적 |
+| F12 | 소스는 `logs/manual.png`, EXE는 `%LOCALAPPDATA%/LANFALL/0.5/logs/manual.png` |
 
-* [ ] FPS Player Movement
-* [ ] Shooting & Raycast
-* [ ] Weapon System
-* [ ] HP & Armor
-* [ ] Item Looting
-* [ ] Random Spawn
-* [ ] Shrinking Safe Zone
-* [ ] Player Death & Spectating
-* [ ] LAN Room Discovery
-* [ ] Host / Client Multiplayer
-* [ ] Player Position Synchronization
-* [ ] Kill Feed
-* [ ] Game Lobby
-* [ ] Battle Royale Winner System
-* [ ] Windows EXE Build
+권총으로 시작하며 무기·탄약·방탄복과 아래 회복템을 F로 줍습니다. Tab 인벤토리에서 종류를 선택해 사용하며 H는 필요한 회복템을 자동 선택합니다. 이동·점프·피격·무기 교체로 사용이 취소되고, 완료된 경우에만 아이템이 소모됩니다.
 
----
+| 아이템 | 사용 시간 | 효과 |
+|---|---:|---|
+| 붕대 | 4초 | HP +15, 최대 75 |
+| 구급상자 | 6초 | HP 75까지 회복 |
+| 의료용 키트 | 8초 | HP 100까지 회복 |
+| 에너지 드링크 | 4초 | 부스트 +40 |
+| 진통제 | 6초 | 부스트 +60 |
 
-## 🔫 Weapons
+부스트는 시간에 따라 줄어들며 HP를 서서히 100까지 회복합니다. 방탄복은 총격 피해 일부를 흡수합니다. 머리/몸통/다리 피해 배율은 1.8/1.0/0.65이고 피해량은 실제 잃은 HP 기준으로 집계합니다. 사망 시 쓰러지는 동작과 초록 연기가 나오고 소지 장비가 개별 3D 모델로 떨어집니다. 붉은 방향 표시는 가까운 총성과 실제 피격을 표시하며, 피격 표식이 더 진하고 오래 유지됩니다. 총알 궤적은 시각 효과이며 명중 판정은 서버 레이캐스트입니다. 장전하면 조준이 해제되고 총기·손·탄창 동작이 재생됩니다.
 
-현재 기본적으로 다음 종류의 무기를 구현하는 것을 목표로 합니다.
 
-```text
-Assault Rifle
-SMG
-Shotgun
-Sniper / DMR
-Pistol
+인벤토리와 지도는 Esc로 닫을 수 있습니다. Esc 일시 메뉴에서 방을 나가면 메뉴도 함께 제거됩니다. 조준 시 총기와 열린 조준경이 화면 중앙으로 이동합니다. 주변을 검게 가리지 않으며 1x/2x/4x 배율을 전환할 수 있습니다. 캐릭터 크기·눈높이·충돌·피격 범위를 함께 맞췄고, 약 55cm 이하의 턱을 걸어서 오릅니다. 작은 방은 중앙 구역에서 시작하며, 가까이 있고 벽에 가리지 않은 상대는 이름·거리 표식을 표시합니다.
+
+## 그래픽과 사운드
+
+초기 블록 캐릭터와 SF 블래스터는 현실적인 형태의 무료 군인·총기 에셋으로 교체했습니다. 원본 텍스처, PBR 재질, HDR 하늘을 변환한 스카이, 안개, 그림자, 조준·반동을 사용합니다. 부자연스러운 노란 구체 총구/탄착 효과는 제거했습니다. 실제 총성 녹음에서 추출한 사격음은 겹쳐 재생되며 거리·좌우 방향·차폐에 따라 음량이 달라집니다. 재장전, 발소리도 포함됩니다. 소스와 라이선스는 [ASSET_CREDITS.md](ASSET_CREDITS.md)에 정리했습니다.
+
+이 맵은 본래 모바일 운전 게임용 도시 모델입니다. 창문·벽의 원본 텍스처와 건물 내부 구조에는 한계가 있으며, PUBG 수준의 실사 에셋/애니메이션 품질과 같지는 않습니다. 캐릭터 걷기와 재장전 동작은 간단한 구현입니다. 봇은 도시의 연결된 도로 격자(11,565개 지점)에서 A* 경로를 탐색하고, 자기장 진입 전에 다음 안전구역으로 이동합니다. 이동 불가능한 안뜰은 시작 지점에서 제외합니다. 사격·엄폐 판단은 간단한 AI이며 사람 수준 전술이나 기절 후 부활은 구현하지 않았습니다.
+
+실행 시 스플래시부터 전체화면으로 표시됩니다. 로비의 The Hunt와 승리 음악은 무료 배포가 허용된 별도 음악이며, **설정의 배경음악/효과음 슬라이더는 즉시 반영**됩니다. 전투 중에는 로비 음악을 정지합니다.
+
+**설정 → 그래픽**에서 LOW / MEDIUM / HIGH를 선택할 수 있습니다. 원거리 표시와 그림자·노멀맵·안티앨리어싱이 달라집니다. 학교 PC는 LOW 또는 MEDIUM부터 시작하세요. 50명 정원 지원과 모든 PC에서 50명 렌더링 60FPS 보장은 다릅니다. 프로파일은 `%USERPROFILE%\.lanfall\settings.json`에 저장합니다.
+
+## 학교 LAN 연결
+
+- Windows 방화벽의 **개인 네트워크**에서 LANFALL 또는 이 폴더의 Python 실행을 허용하세요.
+- 방장 PC에서 **UDP 29740**은 방 검색, **TCP 29741 + UDP 29741**은 게임 통신에 사용됩니다.
+- 인터넷 포트 포워딩은 필요 없습니다. 같은 서브넷이어야 자동 검색됩니다.
+- 무선 AP의 클라이언트 격리, 학교 방화벽/VLAN은 검색과 통신을 막을 수 있습니다. 검색만 막힌 경우 직접 IP 참가를 이용할 수 있습니다.
+- 방장이 종료하면 판도 종료됩니다. 방장 이전 기능은 없습니다. 끊어진 연결은 최대 8초 이내에 정리합니다.
+- 같은 PC에서는 검색 포트 충돌 때문에 방장 하나만 실행하세요. 참가 클라이언트는 여러 개 실행 가능합니다.
+
+## 테스트와 디버깅
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install pytest
+.\.venv\Scripts\python.exe -m pytest tests -q
+.\.venv\Scripts\python.exe tools\load_test.py
+.\.venv\Scripts\python.exe main.py --offscreen --smoke 41 --presentation-test --bots 3
+.\.venv\Scripts\python.exe tools\check_bot_navigation.py
 ```
 
-각 무기는 Damage, Fire Rate, Magazine, Reload Time, Recoil 등의 서로 다른 특성을 갖도록 설계합니다.
+자동 검사는 평지·벽·계단·경사·급경사·점프/이중 점프 방지, 실제 도시 시작 위치 안정성, 첫 충돌/벽 뒤 명중 방지, 탄약·재장전·사망·아이템 중복 획득·승자, TCP 분할 프레임, 패킷 검증, 준비/시작 권한, 재경기 라운드 구분, LAN 검색 만료, 호스트 종료를 확인합니다.
 
----
+`tools/load_test.py`는 실제 TCP/UDP 소켓 50개 클라이언트를 localhost에 연결하여 상태 동기화를 검사합니다. **서로 다른 PC 50대의 실제 LAN 시험은 수행하지 않았습니다.** 결과는 `logs/tests-upgrade.txt`, `logs/bot-navigation.json`, `logs/load-test.json`, `logs/smoke.json`에 있습니다. 그래픽 스모크 테스트는 실제 창에서 이동·점프·사격하고 이미지를 저장합니다. FPS 수치는 해당 PC·해당 짧은 실행 경로의 측정값입니다.
 
-## 🗺 Map
+두 게임 창 테스트:
 
-게임 맵은 소규모 LAN 플레이에 맞게 제작하며 다음과 같은 지역으로 구성할 예정입니다.
+플레이용 EXE에는 모든 리소스와 런타임이 포함되어 있으며 별도 다운로드가 없습니다. 소스 개발자는 같은 버전의 EXE를 한 번 실행한 뒤 아래 명령으로 로컬 실행 캐시에서 리소스를 가져올 수 있습니다. `Play-LANFALL.cmd`도 같은 방식으로 준비합니다. 소스용 Python 의존성 설치에는 인터넷이 필요합니다.
 
-```text
-Small Town
-Warehouse
-Research Lab
-Hill
-Forest
-Central Combat Area
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe tools/fetch_runtime.py
+.\.venv\Scripts\python.exe main.py --auto-host --bots 0 --name Host
+.\.venv\Scripts\python.exe main.py --join 127.0.0.1:29741 --name Guest
 ```
 
-평지만 사용하는 것이 아니라 언덕, 경사면, 건물, 계단 등의 높낮이를 활용해 전투가 다양한 방향에서 발생하도록 설계합니다.
+두 번째 창에서 준비, 첫 번째 창에서 게임 시작을 누릅니다.
 
----
+## Windows EXE 빌드
 
-## 📡 Network Concept
-
-```text
-LAN Discovery
-     │
-     │ UDP Broadcast
-     ▼
-Find Host
-     │
-     ▼
-Connect
-     │
-     ├── Player Movement
-     ├── Shooting
-     ├── HP
-     ├── Items
-     ├── Safe Zone
-     └── Game State
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-게임방 탐색과 실제 게임 통신을 분리하여 Broadcast 트래픽을 줄이고, Host가 중요한 게임 상태를 관리하도록 구성하는 것이 네트워크 설계의 핵심입니다.
+Nuitka onefile 빌드를 사용합니다. 최초 빌드는 컴파일러와 빌드 의존성을 다운로드하므로 인터넷과 시간이 필요합니다. `build/LANFALL.exe`를 만든 뒤 단독 실행 검사를 거쳐 작업 폴더에 **`LANFALL.exe` 하나**를 내보냅니다. 이 파일만 다른 Windows 64비트 PC에 복사합니다. 대상 PC에 Python을 따로 설치하지 않도록 Python 런타임과 라이브러리, 실행용 에셋을 묶습니다. 첫 실행 때 사용자 캐시에 압축을 풀기 때문에 잠시 기다릴 수 있습니다. 원본 맵 GLB와 제작용 도구는 실행 배포에 필요하지 않습니다. 설정은 사용자 폴더에 별도로 저장됩니다.
 
----
+`tools/verify_release.ps1`은 실행파일만 별도 폴더에 복사하고 Python 관련 환경 경로를 제거한 뒤 로비·전투·인벤토리·조준·지도·Esc 메뉴 정리를 검사합니다. 결과와 로드된 런타임 경로는 `logs/release-check.json`에 저장됩니다. 이 검사는 현재 PC에서 수행하는 격리 검사이며, 별도 PC 전체 호환성 시험을 대신하지는 않습니다.
 
-## ▶ Development
+## 폴더
 
-```bash
-git clone <repository>
-cd packet-drop
-```
+- `game/client`, `game/ui`: 렌더링·입력·대기실·HUD
+- `game/server`: 방장 서버·전투·아이템·승자 판정
+- `game/network`: TCP 프레이밍·UDP 입력/스냅샷·LAN 검색
+- `game/world`: 공유 Bullet 충돌/이동·자기장·효과
+- `game/weapons`: 무기 수치
+- `game/assets/maps/drive_city_original.glb`: 사용자 원본 맵
+- `game/assets/weapons`, `characters`, `audio`: 정리된 게임 에셋
+- `game/assets/cache`: 빠른 로딩용 BAM·미니맵
+- `game/assets/source`, `licenses`: 원본 다운로드·출처/라이선스
+- `tools`: 맵/모델/사운드 변환 및 부하 검사. `tools/vendor`는 제작용 Blender입니다.
 
-필요한 Python 패키지 설치:
+서버는 30Hz 고정 틱, 스냅샷은 15Hz입니다. UDP는 플레이어 입력과 최신 위치, TCP는 입장·전투 이벤트·상태 변경을 전달합니다. 스냅샷은 10명씩 분할해 조립하고 오래된 틱 및 이전 라운드의 패킷은 버립니다. 렌더링 스레드는 큐를 통해 이벤트를 받아 Entity를 수정합니다. 플레이어 이동은 로컬 예측 후 서버 위치와 조정하고, 타 플레이어는 약 100ms 지연 보간합니다.
 
-```bash
-pip install -r requirements.txt
-```
+0.4 회귀 검사에는 전원 로딩 대기, 팀 정원과 이동, 팀 승리/오사 방지, 부위별 피해, 회복 완료·취소, 관전·사망·전적·장전 UI 검사가 포함됩니다. `victory-preview.png`는 승리 화면의 시각 회귀용 고정 데이터이며 실제 전적 기록이 아닙니다.
 
-게임 실행:
-
-```bash
-python main.py
-```
-
----
-
-## 📂 Project Structure
-
-```text
-packet-drop/
-│
-├── main.py
-├── assets/
-├── network/
-├── player/
-├── weapons/
-├── world/
-├── ui/
-├── tests/
-│
-├── requirements.txt
-├── README.md
-├── LICENSE
-└── .gitignore
-```
-
----
-
-## 🚧 Development Status
-
-**Currently in development**
-
-첫 번째 목표는 같은 LAN에 연결된 Windows PC에서 한 플레이어가 방을 생성하고 다른 플레이어가 자동으로 해당 방을 검색하여 접속한 뒤 하나의 배틀로얄 매치를 끝까지 플레이할 수 있도록 만드는 것입니다.
-
----
-
-## 📄 License
-
-This project is licensed under the **MIT License**.
-
----
-
-### PACKET DROP
-
-**Drop in. Loot up. Stay connected. Be the last one standing.**
+0.5 변경: 도로에 지정한 야외 스폰 84곳만 사용합니다(`game/assets/cache/spawns.json`). 경기장과 건물 내부는 스폰 목록에 없습니다. 얇은 건축 면의 양방향 충돌을 보강했습니다. 벽·바닥 탄착에는 짧은 먼지와 최대 9초 동안 서서히 사라지는 탄흔이 표시되며, 가까운 80개로 제한합니다. 목적지는 개인 표식이며 소형 지도와 전체 지도에 함께 표시됩니다. 전체 지도는 커서 중심으로 1~5배 확대합니다.

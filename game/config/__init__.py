@@ -4,7 +4,7 @@ import json
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / 'assets'
 MAGIC = 'LANFALL'
-VERSION = 1
+VERSION = 2
 DISCOVERY_PORT = 29740
 GAME_PORT = 29741
 TICK_RATE = 30

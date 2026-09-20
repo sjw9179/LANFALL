@@ -78,3 +78,15 @@ cache/
 
 # Large original map asset
 game/assets/maps/drive_city_original.glb
+tools/vendor/
+standalone-test/
+nuitka-crash-report.xml
+!Play-LANFALL.cmd
+
+# Downloaded authoring originals stay local; release contains the runtime pack.
+game/assets/source/
+!game/assets/cache/
+game/assets/cache/*
+!game/assets/cache/spawns.json
+!game/assets/cache/city.json
+!game/assets/cache/navigation.json

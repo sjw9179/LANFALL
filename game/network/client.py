@@ -18,6 +18,7 @@ class Connection:
         self.token = ''
         self.seq = 0
         self.tick = -1
+        self.round_id = 0
         self.last_recv = time.monotonic()
         self.tx = self.rx = self.lost = 0
         self.ping = 0
@@ -60,6 +61,7 @@ class Connection:
                     self.last_recv=now
                     for p in parser.feed(data):
                         if p['t']=='welcome': self.id=p['id']; self.token=p['token']
+                        if p['t']=='started': self.tick=-1; self.round_id=p['round']; fragments.clear()
                         if p['t']=='pong': self.ping=(now-p['stamp'])*1000
                         self.emit(p)
                 if udp in readable:
@@ -70,6 +72,7 @@ class Connection:
                         try: p=decode(data)
                         except ValueError: continue
                         if p.get('t')!='snapshot' or p.get('token')!=self.token: continue
+                        if p.get('round')!=self.round_id: continue
                         tick=p.get('tick',-1)
                         if type(tick)!=int or tick<=self.tick: continue
                         parts=p.get('parts',1); part=p.get('part',0)

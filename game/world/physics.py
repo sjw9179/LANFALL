@@ -3,7 +3,7 @@ import math
 from panda3d.core import (NodePath, Loader, Filename, Vec3, Point3, TransformState,
                           BitMask32, loadPrcFileData)
 from panda3d.bullet import (BulletWorld, BulletTriangleMesh, BulletTriangleMeshShape,
-                            BulletRigidBodyNode, BulletCapsuleShape, YUp)
+                            BulletRigidBodyNode, BulletCapsuleShape, BulletBoxShape, YUp)
 from game.config import ASSETS
 
 loadPrcFileData('', 'coordinate-system y-up-left')
@@ -27,6 +27,11 @@ class CollisionWorld:
             self.root.attachNewNode(body)
             self.world.attachRigidBody(body)
             self.meshes.append(mesh)
+        # The supplied driving map contains non-playable gaps between road meshes.
+        # A shared subgrade catches players instead of letting them fall through the city.
+        body=BulletRigidBodyNode('subgrade');body.addShape(BulletBoxShape(Vec3(210,.5,210)))
+        body.setIntoCollideMask(MASK);node=self.root.attachNewNode(body);node.setPos(0,-.55,0)
+        self.world.attachRigidBody(body)
 
     def ray(self, origin, end):
         r=self.world.rayTestClosest(Point3(*origin),Point3(*end),MASK)
@@ -40,24 +45,18 @@ class CollisionWorld:
         return self.ray((x,top,z),(x,bottom,z))
 
     def spawn_points(self):
-        import random
-        points=[]
-        for x in range(-145,146,12):
-            for z in range(-145,146,12):
-                if x*x+z*z>165**2: continue
-                h=self.ground(x,z,top=7)
-                if h and h[1].y>.75 and -.5<h[0].y<4:
-                    # Reject interiors with too little head clearance and wall edges.
-                    if self.ray(h[0]+Vec3(0,.2,0),h[0]+Vec3(0,2.2,0)): continue
-                    if any(self.distance(h[0]+Vec3(0,.8,0),d,1.2)<1.1 for d in ((1,0,0),(-1,0,0),(0,0,1),(0,0,-1))): continue
-                    points.append([x,float(h[0].y)+.04,z])
-        random.Random(781).shuffle(points)
-        if len(points)<50: raise RuntimeError(f'Only {len(points)} safe spawn points found')
+        import json
+        data=json.loads((ASSETS/'cache/spawns.json').read_text(encoding='utf8'))
+        points=[entry['pos'] for entry in data['points']]
+        if len(points)<50:raise RuntimeError('The map requires at least 50 authored outdoor spawns')
         return points
 
 class Mover:
-    RADIUS=.32
-    STEP=.36
+    HEIGHT=2.15
+    EYE=1.90
+    CROUCH_EYE=1.22
+    RADIUS=.36
+    STEP=.55
     def __init__(self, world, pos):
         self.world=world
         self.pos=Vec3(*pos)
@@ -66,8 +65,8 @@ class Mover:
         self.normal=Vec3(0,1,0)
         self.velocity=Vec3(0)
         self.crouch=False
-        self.shape=BulletCapsuleShape(.32,1.02,YUp)
-        self.short_shape=BulletCapsuleShape(.32,.45,YUp)
+        self.shape=BulletCapsuleShape(self.RADIUS,self.HEIGHT-2*self.RADIUS,YUp)
+        self.short_shape=BulletCapsuleShape(self.RADIUS,1.4-2*self.RADIUS,YUp)
         self.jump_held=False
 
     def sweep(self, a, b, shape=None):
@@ -79,14 +78,14 @@ class Mover:
         requested=bool(controls.get('crouch',False))
         if requested: self.crouch=True
         elif self.crouch:
-            if not self.world.ray(self.pos+Vec3(0,1,0),self.pos+Vec3(0,1.8,0)): self.crouch=False
+            if not self.world.ray(self.pos+Vec3(0,1,0),self.pos+Vec3(0,self.HEIGHT+.05,0)): self.crouch=False
         yaw=math.radians(controls.get('yaw',0))
         x,z=controls.get('move',[0,0]); mag=max(1,math.hypot(x,z))
         speed=2.6 if self.crouch else (8 if controls.get('sprint') else 5.4)
         if controls.get('ads'): speed*=.65
         delta=Vec3((x*math.cos(yaw)+z*math.sin(yaw))/mag,0,(z*math.cos(yaw)-x*math.sin(yaw))/mag)*speed*dt
         shape=self.short_shape if self.crouch else self.shape
-        half=.545 if self.crouch else .83
+        half=.7 if self.crouch else self.HEIGHT/2
         # Raised horizontal capsule allows small stairs, never high walls.
         offset=Vec3(0,half+(self.STEP if self.grounded else .025),0)
         for _ in range(2):

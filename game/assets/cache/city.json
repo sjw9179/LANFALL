@@ -1,0 +1,14 @@
+{
+  "id": "drive_city",
+  "name": "DRIVE CITY",
+  "subtitle": "SOUTH DISTRICT",
+  "radius": 185,
+  "extent": 210,
+  "center": [
+    0,
+    0
+  ],
+  "source_nodes": 1418,
+  "batches": 66,
+  "seconds": 5.74
+}

@@ -25,13 +25,15 @@ class Peer:
     rate_count: int=0
 
 class Host:
-    def __init__(self,physics,name='LANFALL ROOM',capacity=10,bots=0,code='',port=GAME_PORT,discovery_port=DISCOVERY_PORT):
+    def __init__(self,physics,name='LANFALL ROOM',capacity=10,bots=0,code='',port=GAME_PORT,discovery_port=DISCOVERY_PORT,team_size=1):
         self.name=str(name)[:32]; self.capacity=max(1,min(MAX_PLAYERS,int(capacity)))
         self.bots=max(0,min(int(bots),self.capacity-1)); self.code=str(code)[:24]
         self.port=int(port); self.discovery_port=discovery_port; self.owner=secrets.token_hex(16)
         self.host_id=None; self.next_id=1; self.peers={}; self.sockets=[]
         self.stop_event=threading.Event(); self.errors=queue.Queue(); self.ready=threading.Event()
         self.match=Match(physics,self.broadcast)
+        self.match.team_size=4 if team_size==4 else 1
+        self.loaded=set();self.loading_at=0
         self.tick_ms=0.; self.thread=threading.Thread(target=self.run,daemon=True,name='LANFALL host')
         self.thread.start()
         if not self.ready.wait(4): raise RuntimeError('Server startup timeout')
@@ -47,7 +49,7 @@ class Host:
 
     def lobby(self):
         self.broadcast('lobby',name=self.name,capacity=self.capacity,bots=self.bots,host=self.host_id,
-                       phase=self.match.phase,players=[p.public() for p in self.match.players.values()],map='drive_city')
+                       phase=self.match.phase,players=[p.public() for p in self.match.players.values()],map='drive_city',team_size=self.match.team_size)
 
     def drop(self,peer):
         self.peers.pop(peer.sock,None)
@@ -57,6 +59,8 @@ class Host:
             p=self.match.players[peer.id]
             if self.match.phase=='playing': self.match.damage(p,10000,source='disconnect')
             del self.match.players[peer.id]
+            self.loaded.discard(peer.id)
+            if self.match.phase=='loading':self.check_loaded()
             self.lobby()
         if peer.id is not None and peer.id==self.host_id: self.stop_event.set()
 
@@ -82,20 +86,44 @@ class Host:
                 self.send(peer,'error',reason=reason); return
             peer.id=self.next_id; self.next_id+=1; peer.token=secrets.token_hex(12)
             self.match.players[peer.id]=Player(peer.id,name.strip(),ready=owner)
+            self.match.players[peer.id].team=next((i for i in range(1,51) if sum(o.team==i for o in self.match.players.values())<4),1) if self.match.team_size==4 else peer.id
             if owner: self.host_id=peer.id
             self.send(peer,'welcome',id=peer.id,token=peer.token,host=self.host_id)
             self.lobby(); return
         player=self.match.players.get(peer.id)
         if not player: return
         if kind=='ready' and self.match.phase=='lobby': player.ready=bool(p.get('ready')); self.lobby()
+        elif kind=='team' and self.match.phase=='lobby' and self.match.team_size==4:
+            team=p.get('team')
+            if type(team) is int and 1<=team<=13 and sum(o.team==team for o in self.match.players.values() if o.id!=player.id)<4:
+                player.team=team;player.ready=peer.id==self.host_id;self.lobby()
+        elif kind=='loaded' and self.match.phase=='loading' and p.get('round')==self.match.round_id:
+            self.loaded.add(peer.id);self.check_loaded()
+        elif kind=='spectate' and not player.alive:
+            target=self.match.players.get(p.get('id'))
+            if target and target.alive:player.watching=target.id
+        elif kind=='bots' and peer.id==self.host_id and self.match.phase=='lobby':
+            count=p.get('count')
+            if type(count) is int:
+                self.bots=max(0,min(count,self.capacity-len(self.match.players)))
+                self.lobby()
         elif kind=='start' and peer.id==self.host_id:
             if self.match.phase=='lobby' and all(o.ready for o in self.match.players.values()):
-                self.match.start(self.bots); self.lobby()
+                self.loaded=set();self.loading_at=time.monotonic()
+                self.match.start(self.bots);self.match.phase='loading';self.lobby();self.check_loaded()
             else: self.send(peer,'error',reason='All players must be ready')
         elif kind=='return' and peer.id==self.host_id and self.match.phase=='finished':
             self.match.return_lobby(); self.lobby()
-        elif kind in ('reload','switch','pickup','heal'):
+        elif kind in ('reload','switch','pickup','heal','cancel'):
             self.match.action(player,kind,**{k:v for k,v in p.items() if k not in ('m','v','t')})
+
+    def check_loaded(self):
+        humans={p.id for p in self.match.players.values() if not p.bot}
+        self.broadcast('loading',ready=len(humans & self.loaded),total=len(humans))
+        if humans and humans<=self.loaded:
+            self.match.phase='playing';self.match.now=0
+            for p in self.match.players.values():p.controls={}
+            self.broadcast('deployed',round=self.match.round_id)
 
     def input_packet(self,p,addr):
         if p['t']!='input' or type(p.get('id')) is not int or type(p.get('seq')) is not int: return
@@ -159,20 +187,25 @@ class Host:
                     except OSError: self.drop(peer)
                 while accumulator>=1/30:
                     began=time.perf_counter(); self.match.update(1/30); self.tick_ms=(time.perf_counter()-began)*1000; accumulator-=1/30
-                    if self.match.phase=='playing' and self.match.tick%2==0:
+                    if self.match.phase in ('playing','loading') and self.match.tick%2==0:
                         rows=self.match.snapshot(); chunks=[rows[i:i+10] for i in range(0,len(rows),10)]
                         for peer in list(self.peers.values()):
                             if peer.udp:
                                 for index,rows_part in enumerate(chunks):
-                                    packet=encode('snapshot',token=peer.token,tick=self.match.tick,part=index,parts=len(chunks),players=rows_part,zone=self.match.zone.state())
+                                    packet=encode('snapshot',token=peer.token,round=self.match.round_id,tick=self.match.tick,part=index,parts=len(chunks),players=rows_part,zone=self.match.zone.state())
                                     try: udp.sendto(packet,peer.udp)
                                     except OSError: pass
                 if now-state_at>.25:
                     state_at=now
                     for peer in list(self.peers.values()):
                         p=self.match.players.get(peer.id)
-                        if p and self.match.phase!='lobby': self.send(peer,'state',players=[q.public() for q in self.match.players.values()],own=p.private(self.match.now),zone=self.match.zone.state(),tick_ms=round(self.tick_ms,2))
+                        if p and self.match.phase!='lobby':
+                            target=self.match.players.get(p.watching) if not p.alive else None
+                            watch=dict(id=target.id,own=target.private(self.match.now)) if target and target.alive else {}
+                            self.send(peer,'state',players=[q.public() for q in self.match.players.values()],own=p.private(self.match.now),watch=watch,zone=self.match.zone.state(),tick_ms=round(self.tick_ms,2))
                 for peer in list(self.peers.values()):
+                    if self.match.phase=='loading' and now-self.loading_at>90 and peer.id not in self.loaded:
+                        self.send(peer,'error',reason='맵 로딩 제한 시간(90초)을 초과했습니다.');self.drop(peer);continue
                     if now-peer.seen>8 or (peer.id is None and now-peer.joined>5): self.drop(peer)
         except Exception as e:
             import traceback
